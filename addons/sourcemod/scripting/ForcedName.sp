@@ -1,6 +1,6 @@
 #include <sourcemod>
 #include <sdktools>
-#include <morecolors>
+#include <multicolors>
 
 #pragma tabsize 0
 

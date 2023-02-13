@@ -2,188 +2,227 @@
 #include <sdktools>
 #include <multicolors>
 
-#pragma tabsize 0
+#pragma semicolon 1
+#pragma newdecls required
 
 KeyValues Kv;
 StringMap g_smSteamID;
 
-char FilePath[128], SteamID[32], ForcedName[64], OriginalName[64], CurrentName[64], NewName[64], AdminName[64], Time[32];
+char FilePath[128], SteamID[32], ForcedName[64], OriginalName[64], AdminName[64], Time[32];
 
 public Plugin myinfo =
 {
 	name = "ForcedName",
 	author = "ire.",
 	description = "Force a name on a player",
-	version = "1.0"
+	version = "1.2"
 };
+
+public APLRes AskPluginLoad2(Handle myself, bool late, char[] error, int err_max)
+{
+	RegPluginLibrary("ForcedName");
+	return APLRes_Success;
+}
 
 public void OnPluginStart()
 {
 	RegAdminCmd("sm_forcename", ForceName, ADMFLAG_BAN);
 	RegAdminCmd("sm_forcednames", ForcedNames, ADMFLAG_BAN);
-	
+
 	HookEvent("player_changename", Event_ChangeName);
-	
+
 	LoadTranslations("common.phrases");
 	LoadTranslations("forcedname.phrases");
 }
 
 public void OnMapStart()
 {
+	delete g_smSteamID;
 	g_smSteamID = new StringMap();
-	
+
 	GetNamesFromCfg();
 }
 
-public void OnMapEnd()
+public void OnClientConnected(int client)
 {
-	g_smSteamID.Clear();
-	delete g_smSteamID;
-	delete Kv;
-}
-
-public void OnClientPostAdminCheck(int client)
-{
-    if(!IsFakeClient(client))
-	{
+	if (!IsValidClient(client))
 		CreateTimer(2.0, CheckClientName, GetClientUserId(client));
-	}
 }
 
-public Action CheckClientName(Handle timer, userid)
+public Action CheckClientName(Handle timer, int userid)
 {
-    int client = GetClientOfUserId(userid);
-	
-	if(client)
+	int client = GetClientOfUserId(userid);
+
+	if (client)
 	{
-		if(GetClientAuthId(client, AuthId_Steam2, SteamID, sizeof(SteamID)) && g_smSteamID.GetString(SteamID, ForcedName, sizeof(ForcedName)))
-		{
+		if (GetClientAuthId(client, AuthId_Steam2, SteamID, sizeof(SteamID)) && g_smSteamID.GetString(SteamID, ForcedName, sizeof(ForcedName)))
 			SetClientName(client, ForcedName);
-		}	
 	}
 }
 
 public void Event_ChangeName(Event event, const char[] name, bool dontBroadcast)
 {
-    int client = GetClientOfUserId(event.GetInt("userid"));
-	
-	if(!IsFakeClient(client)) 
+	int client = GetClientOfUserId(event.GetInt("userid"));
+
+	if (!IsValidClient(client)) 
 	{
+		char NewName[64];
 		event.GetString("newname", NewName, sizeof(NewName));
-		if(GetClientAuthId(client, AuthId_Steam2, SteamID, sizeof(SteamID)) && g_smSteamID.GetString(SteamID, ForcedName, sizeof(ForcedName)))
+		if (GetClientAuthId(client, AuthId_Steam2, SteamID, sizeof(SteamID)) && g_smSteamID.GetString(SteamID, ForcedName, sizeof(ForcedName)))
 		{
-			if(!StrEqual(NewName, ForcedName, false))
-			{
+			if (!StrEqual(NewName, ForcedName, false))
 				SetClientName(client, ForcedName);
-			}
 		}
 	}
 }
 
 public Action ForceName(int client, int args)
-{	
-	if(args != 2)
+{
+	char Arg1[64], Arg2[64], TargetName[64];
+
+	if (args != 2)
 	{
-		CPrintToChat(client, "%t", "Usage");
+		CReplyToCommand(client, "%t", "Usage");
 		return Plugin_Handled;
 	}
-	
-	GetCmdArg(1, CurrentName, sizeof(CurrentName));
-	GetCmdArg(2, NewName, sizeof(NewName));
-	
-	int g_iTarget = FindTarget(client, CurrentName, true);
-	if(g_iTarget == -1)
-	{
+
+	GetCmdArg(1, Arg1, sizeof(Arg1));
+	GetCmdArg(2, Arg2, sizeof(Arg2));
+
+	int g_iTarget = FindTarget(client, Arg1, true);
+
+	if (g_iTarget == -1)
 		return Plugin_Handled;
-	}
-	
+
 	GetClientName(client, AdminName, sizeof(AdminName));
-	
-	GetClientAuthId(g_iTarget, AuthId_Steam2, SteamID, sizeof(SteamID));
-	if(StrEqual(SteamID, "STEAM_ID_STOP_IGNORING_RETVALS", false) || StrEqual(SteamID, "STEAM_ID_PENDING", false))
+
+	if (client <= 0)
+		Format(AdminName, sizeof(AdminName), "Console/Server");
+
+	GetClientName(g_iTarget, TargetName, sizeof(TargetName));
+
+	if (!GetClientAuthId(g_iTarget, AuthId_Steam2, SteamID, sizeof(SteamID)))
 	{
-		CPrintToChat(client, "%t", "InvalidSteamID");
+		CReplyToCommand(client, "%t", "InvalidSteamID");
 		return Plugin_Handled;
 	}
-	
-	CPrintToChat(client, "%t", "ForcedName", NewName, g_iTarget, SteamID); 
-	
-	SetClientName(g_iTarget, NewName);
-	
+
+	CReplyToCommand(client, "%t", "ForcedName", Arg2, TargetName, SteamID); 
+
+	SetClientName(g_iTarget, Arg2);
+
 	SetUpKeyValues();
 	Kv.JumpToKey(SteamID, true);
-	Kv.SetString("OriginalName", CurrentName);
-	Kv.SetString("ForcedName", NewName);
+	Kv.SetString("OriginalName", TargetName);
+	Kv.SetString("ForcedName", Arg2);
+	g_smSteamID.SetString(SteamID, Arg2);
 	Kv.SetString("AdminName", AdminName);
-	FormatTime(Time, sizeof(Time), "%c", GetTime());
-	Kv.SetString("Time", Time);
+	FormatTime(Time, sizeof(Time), "%d.%m.%Y %R", GetTime());
+	Kv.SetString("Date", Time);
 	Kv.Rewind();
 	Kv.ExportToFile(FilePath);
 	delete Kv;
 
-	GetNamesFromCfg();
-	
 	return Plugin_Handled;
 }
 
 public Action ForcedNames(int client, int args)
 {
-	char MenuBuffer[256];
-	
-	Menu menu = new Menu(MenuHandle);
-	
+	char MenuBuffer[128], MenuBuffer2[32], MenuBuffer3[128];
+
+	Menu MainMenu = new Menu(MenuHandle);
+
 	Format(MenuBuffer, sizeof(MenuBuffer), "%T", "MenuTitle", client);
-	menu.SetTitle(MenuBuffer);
+	MainMenu.SetTitle(MenuBuffer);
 
 	SetUpKeyValues();
-	if(!Kv.GotoFirstSubKey())
+	if (!Kv.GotoFirstSubKey())
 	{
-		Format(MenuBuffer, sizeof(MenuBuffer), "%T", "MenuEmpty", client);
-		menu.AddItem("empty", MenuBuffer, ITEMDRAW_DISABLED);
-	}
-	else
-	{
+		Format(MenuBuffer2, sizeof(MenuBuffer2), "%T", "MenuEmpty", client);
+		MainMenu.AddItem("", MenuBuffer2, ITEMDRAW_DISABLED);
+	} else {
 		do
 		{
 			Kv.GetSectionName(SteamID, sizeof(SteamID));
 			Kv.GetString("ForcedName", ForcedName, sizeof(ForcedName));
-			Kv.GetString("OriginalName", OriginalName, sizeof(OriginalName));
-			Kv.GetString("AdminName", AdminName, sizeof(AdminName));
-			Kv.GetString("Time", Time, sizeof(Time));
-			Format(MenuBuffer, sizeof(MenuBuffer), "Forced name: %s - Original name: %s \nOn %s by admin %s", ForcedName, OriginalName, Time, AdminName);
-			menu.AddItem(SteamID, MenuBuffer);
+			Format(MenuBuffer3, sizeof(MenuBuffer3), "%T", "MenuContent", client, ForcedName);
+			MainMenu.AddItem(SteamID, MenuBuffer3);
 		}
 		while(Kv.GotoNextKey());
 	}
 	delete Kv;
+
+	MainMenu.ExitButton = true;
+	MainMenu.Display(client, MENU_TIME_FOREVER);
 	
-	menu.ExitButton = true;
-	menu.Display(client, 999);
 	return Plugin_Handled;
 }
 
-public int MenuHandle(Menu menu, MenuAction action, param1, param2)
+int MenuHandle(Menu menu, MenuAction action, int param1, int param2)
 {
-	if(action == MenuAction_Select)
+	if (action == MenuAction_Select)
 	{
-		char MenuChoice[32];
+		char MenuBuffer[128], MenuChoice[32], MenuBuffer2[128], MenuBuffer3[32];
+
+		Menu SubMenu = new Menu(SubMenuHandle);
+
+		Format(MenuBuffer, sizeof(MenuBuffer), "%T", "SubMenuTitle", param1);
+		SubMenu.SetTitle(MenuBuffer);
+
 		menu.GetItem(param2, MenuChoice, sizeof(MenuChoice));
+
 		SetUpKeyValues();
-		Kv.JumpToKey(MenuChoice, false)
-		Kv.DeleteThis();
-		Kv.Rewind();
-		Kv.ExportToFile(FilePath);
+		Kv.JumpToKey(MenuChoice, false);
+		Kv.GetString("ForcedName", ForcedName, sizeof(ForcedName));
+		Kv.GetString("OriginalName", OriginalName, sizeof(OriginalName));
+		Kv.GetString("AdminName", AdminName, sizeof(AdminName));
+		Kv.GetString("Date", Time, sizeof(Time));
 		delete Kv;
-		g_smSteamID.Remove(MenuChoice);
-		CPrintToChat(param1, "%t", "NameDeleted");
-		
-		ForcedNames(param1, param2);
+
+		Format(MenuBuffer2, sizeof(MenuBuffer2), "%T", "SubMenuContent", param1, ForcedName, OriginalName, AdminName, Time);
+		Format(MenuBuffer3, sizeof(MenuBuffer3), "%T", "SubMenuDeleteName", param1);
+		SubMenu.AddItem("0", MenuBuffer2, ITEMDRAW_DISABLED);
+		SubMenu.AddItem(MenuChoice, MenuBuffer3);
+
+		SubMenu.ExitBackButton = true;
+		SubMenu.Display(param1, MENU_TIME_FOREVER);
 	}
-	
-    else if(action == MenuAction_End)
-    {
-        delete menu;
-    }
+
+	else if (action == MenuAction_End)
+		delete menu;
+}
+
+int SubMenuHandle(Menu menu, MenuAction action, int param1, int param2)
+{
+	if (action == MenuAction_Select)
+	{
+		switch(param2)
+		{
+			case 1:
+			{
+				char MenuChoice[32];
+				menu.GetItem(param2, MenuChoice, sizeof(MenuChoice));
+				SetUpKeyValues();
+				Kv.JumpToKey(MenuChoice, false);
+				Kv.DeleteThis();
+				Kv.Rewind();
+				Kv.ExportToFile(FilePath);
+				delete Kv;
+				g_smSteamID.Remove(MenuChoice);
+				CReplyToCommand(param1, "%t", "NameDeleted");
+				ForcedNames(param1, param2);
+			}
+		}
+	}
+
+	if (action == MenuAction_Cancel)
+	{
+		if (param2 == MenuCancel_ExitBack)
+			ForcedNames(param1, param2);
+	}
+
+	else if (action == MenuAction_End)
+		delete menu;
 }
 
 void GetNamesFromCfg()
@@ -192,7 +231,7 @@ void GetNamesFromCfg()
 	Kv.GotoFirstSubKey();
 	do
 	{
-	    Kv.GetSectionName(SteamID, sizeof(SteamID));
+		Kv.GetSectionName(SteamID, sizeof(SteamID));
 		Kv.GetString("ForcedName", ForcedName, sizeof(ForcedName));
 		g_smSteamID.SetString(SteamID, ForcedName);
 	}
@@ -205,4 +244,13 @@ void SetUpKeyValues()
 	BuildPath(Path_SM, FilePath, sizeof(FilePath), "configs/forcednames.cfg");
 	Kv = new KeyValues("Names");
 	Kv.ImportFromFile(FilePath);
+}
+
+bool IsValidClient(int client, bool nobots = true)
+{
+	if (client <= 0 || client > MaxClients || !IsClientConnected(client) || (nobots && IsFakeClient(client)))
+	{
+		return false;
+	}
+	return IsClientInGame(client);
 }

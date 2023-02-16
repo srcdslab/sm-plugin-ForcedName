@@ -10,7 +10,7 @@
 	}
 	"ForcedName"
 	{
-		"#format" "{1:s},{2:N},{3:s}"
+		"#format" "{1:s},{2:s},{3:s}"
 		"en" "{green}[SM] {white}Forced name {1} on player {2} ({3})"
 	}
 	"NameDeleted"
@@ -19,10 +19,28 @@
 	}
 	"MenuTitle"
 	{
-		"en" "List of forced names - choose to delete."
+		"en" "----------------\nForced names:\n----------------"
 	}
 	"MenuEmpty"
 	{
 		"en" "There are no forced names!"
+	}
+	"MenuContent"
+	{
+		"#format" "{1:s}"
+		"en" "{1}"
+	}
+	"SubMenuTitle"
+	{
+		"en" "**********************"
+	}
+	"SubMenuContent"
+	{
+		"#format" "{1:s},{2:s},{3:s},{4:s}"
+		"en" "\nForced name: {1}\nOriginal name: {2}\nAdmin name: {3}\nTime: {4}\n**********************"
+	}
+	"SubMenuDeleteName"
+	{
+		"en" "Choose to delete the name."
 	}
 }
